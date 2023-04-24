@@ -26,5 +26,5 @@ So far only static IP is supported
 `vmware_vm_ip`: Static IP for each host. This is used to communicate with your cluster using `talosctl`.
 
 ## VMWare DRS
-`vmware_drs_management`: boolean. Set true and make sure you have affinity groups defined in your vmware cluster with name <location>-vms
+`vmware_drs_management`: boolean. Set true and make sure you have affinity groups defined in your vmware cluster with name `<location>-vms`
 `vmware_location`: Host variable set if you use vmware_drs_management.
