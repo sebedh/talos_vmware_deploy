@@ -1,0 +1,86 @@
+---
+
+- name: Customize and start
+  when: vmuuid.instance.instance_uuid is defined or deploy is succeeded
+  delegate_to: "{{ talos_deploy_host }}"
+  block:
+
+    - name: Finding UUID of hosts
+      community.vmware.vmware_guest_info:
+        hostname: "{{ vmware_args.auth.hostname }}"
+        username: "{{ vmware_args.auth.user }}"
+        password: "{{ vmware_args.auth.password }}"
+        datacenter: "{{ vmware_args.datacenter }}"
+        name: "{{ inventory_hostname }}"
+      register: vmuuid
+      ignore_errors: true
+
+    - name: Customizing hosts
+      community.vmware.vmware_guest:
+        hostname: "{{ vmware_args.auth.hostname }}"
+        username: "{{ vmware_args.auth.user }}"
+        password: "{{ vmware_args.auth.password }}"
+        datacenter: "{{ vmware_args.datacenter }}"
+        use_instance_uuid: true
+        uuid: "{{ vmuuid.instance.instance_uuid }}"
+        state: present
+        hardware:
+          memory_mb: "{{ vmware_vm_memory_mb }}"
+          num_cpus: "{{ vmware_vm_num_cpus }}"
+        networks:
+          - name: "{{ vmware_network_name }}"
+            connected: true
+        disk: "{{ vmware_vm_disks }}"
+        advanced_settings:
+          - key: "guestinfo.talos.config"
+            value: "{{ talos_machine_config | b64encode }}"
+          - key: "disk.enableUUID"
+            value: 1
+        wait_for_ip_address: false
+      changed_when: false
+      register: customize
+
+    - name: Schedule Upgrade VM compatability
+      vmware.vmware_rest.vcenter_vm_hardware:
+        upgrade_policy: AFTER_CLEAN_SHUTDOWN
+        upgrade_version: "VMX_{{ vmware_vm_upgrade_version }}"
+        vcenter_hostname: "{{ vmware_args.auth.hostname }}"
+        vcenter_username: "{{ vmware_args.auth.user }}"
+        vcenter_password: "{{ vmware_args.auth.password }}"
+        vm: "{{ vmuuid.instance.moid }}"
+      when:
+        - vmuuid.instance.hw_power_status | lower == "poweredon"
+        - vmuuid.instance.hw_version[-2:] != vmware_vm_upgrade_version
+
+    - name: Upgrade VM compatability
+      vmware.vmware_rest.vcenter_vm_hardware:
+        state: upgrade
+        upgrade_version: "VMX_{{ vmware_vm_upgrade_version }}"
+        vcenter_hostname: "{{ vmware_args.auth.hostname }}"
+        vcenter_username: "{{ vmware_args.auth.user }}"
+        vcenter_password: "{{ vmware_args.auth.password }}"
+        vm: "{{ vmuuid.instance.moid }}"
+      when:
+        - vmuuid.instance.hw_power_status | lower == "poweredoff"
+        - vmuuid.instance.hw_version[-2:] != vmware_vm_upgrade_version
+
+    - name: Start VM
+      community.vmware.vmware_guest:
+        hostname: "{{ vmware_args.auth.hostname }}"
+        username: "{{ vmware_args.auth.user }}"
+        password: "{{ vmware_args.auth.password }}"
+        datacenter: "{{ vmware_args.datacenter }}"
+        use_instance_uuid: true
+        uuid: "{{ vmuuid.instance.instance_uuid }}"
+        state: "poweredon"
+      when: vmuuid.instance.instance_uuid is defined
+
+  rescue:
+
+    - name: Remove temporary directory if failed
+      run_once: true
+      delegate_to: localhost
+      become: false
+      ansible.builtin.file:
+        state: absent
+        path: "{{ conf_tmp }}"

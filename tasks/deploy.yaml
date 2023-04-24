@@ -1,0 +1,70 @@
+---
+
+- name: Deploy
+  delegate_to: "{{ talos_deploy_host }}"
+  become: false
+  block:
+
+    - name: Finding UUID of hosts
+      community.vmware.vmware_guest_info:
+        hostname: "{{ vmware_args.auth.hostname }}"
+        username: "{{ vmware_args.auth.user }}"
+        password: "{{ vmware_args.auth.password }}"
+        datacenter: "{{ vmware_args.datacenter }}"
+        name: "{{ inventory_hostname }}"
+      register: vmuuid
+      ignore_errors: true
+
+    - name: Deploy Talos ova
+      community.vmware.vmware_content_deploy_ovf_template:
+        name: "{{ inventory_hostname }}"
+        hostname: "{{ vmware_args.auth.hostname }}"
+        username: "{{ vmware_args.auth.user }}"
+        password: "{{ vmware_args.auth.password }}"
+        datastore_cluster: "{{ vmware_datastore }}"
+        datacenter: "{{ vmware_args.datacenter }}"
+        cluster: "{{ vmware_args.cluster }}"
+        folder: "{{ vmware_folder | default('/vm') }}"
+        content_library: talos
+        template: "talos-{{ talos_version }}"
+        storage_provisioning: "thick"
+      register: deploy
+      when: vmuuid.failed
+      ignore_errors: true
+
+    - name: Create temporary directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: talosconf
+      register: conf_tmp
+      run_once: true
+      changed_when: false
+
+    - name: Generate the configuration
+      ansible.builtin.copy:
+        content: |
+          {{ talos_machine_config }}
+        mode: '0644'
+        dest: "{{ conf_tmp.path }}/{{ inventory_hostname }}.yml"
+      become: false
+      changed_when: false
+
+    - name: Validate config
+      ansible.builtin.command: "talosctl validate -c {{ conf_tmp.path }}/{{ inventory_hostname }}.yml -m cloud"
+      changed_when: false
+      register: conf_valid
+
+  rescue:
+
+    - name: Remove temporary directory if failed
+      run_once: true
+      delegate_to: localhost
+      become: false
+      ansible.builtin.file:
+        state: absent
+        path: "{{ conf_tmp }}"
+
+- name: Dont continue on bad config
+  ansible.builtin.fail:
+    msg: "Bad configuration: {{ conf_valid.stderr }}"
+  when: conf_valid.rc != 0

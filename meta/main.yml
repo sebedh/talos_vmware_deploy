@@ -1,0 +1,15 @@
+---
+
+galaxy_info:
+  role_name: sbab.talos_deploy
+
+  author: IOPS/TNT
+  description: Deploy Talos k8s in NSX
+  company: SBAB Bank AB
+
+  license: Proprietary to SBAB Bank AB
+  min_ansible_version: 2.9
+
+  platforms: []
+
+dependencies: []

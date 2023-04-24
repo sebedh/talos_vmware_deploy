@@ -1,0 +1,4 @@
+test/controlplane.yaml
+test/worker.yaml
+test/talosconfig
+test/kubeconfig

@@ -1,0 +1,17 @@
+# main tasks for talos_deploy
+---
+
+- name: Deploy hosts to vSphere
+  import_tasks: deploy.yaml
+
+- name: Customize the vms, and upgrade compatibility
+  import_tasks: customize_start.yaml
+
+- name: Bootstrap Talos cluster
+  import_tasks: bootstrap.yaml
+
+- name: Install vmtoolsd on Talos cluster
+  import_tasks: vmtoolsd.yaml
+
+- name: Handle DRS for k8s
+  import_tasks: drs_management.yaml

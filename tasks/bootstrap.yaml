@@ -1,0 +1,67 @@
+---
+
+- name: Check and bootstrap if needed
+  run_once: true
+  delegate_to: "{{ talos_deploy_host }}"
+  block:
+
+    - name: Get the talosconfig
+      ansible.builtin.copy:
+        content: |
+          {{ talos_cluster_config | b64decode }}
+        dest: "{{ conf_tmp.path }}/talosconfig"
+        mode: '0440'
+      changed_when: false
+
+    - name: Check if cluster is bootstraped (timeout 10m)
+      ansible.builtin.command: >
+        talosctl --talosconfig {{ conf_tmp.path }}/talosconfig
+        health
+        --k8s-endpoint {{ k8s_vip }}
+        --endpoints {{ vmware_vm_ip }}
+        --nodes {{ vmware_vm_ip }}
+        --wait-timeout 10m
+      register: pre_cluster_health
+      failed_when: pre_cluster_health.rc == 0
+      ignore_errors: true
+      changed_when: false
+      check_mode: false
+
+    - name: Send the bootstrap command if needed
+      ansible.builtin.command: >
+        talosctl --talosconfig {{ conf_tmp.path }}/talosconfig
+        --endpoints {{ vmware_vm_ip }}
+        --nodes {{ vmware_vm_ip }}
+        bootstrap
+      when: 
+        - "'-c01' in inventory_hostname or not pre_cluster_health.failed"
+        - "'waiting for etcd to be healthy: OK' not in pre_cluster_health.stderr_lines"
+      register: bootstrap_result
+      until: bootstrap_result.rc == 0
+      retries: 12
+      changed_when: bootstrap_result.rc == 0
+      delay: 10
+
+    - name: Await cluster to be healthy
+      ansible.builtin.command: >
+        talosctl --talosconfig {{ conf_tmp.path }}/talosconfig
+        health
+        --k8s-endpoint {{ k8s_vip }}
+        --endpoints {{ vmware_vm_ip }}
+        --nodes {{ vmware_vm_ip }}
+        --wait-timeout 10m
+      changed_when: false
+      register: post_cluster_health
+      retries: 15
+      until: "'waiting for etcd to be healthy: OK' in post_cluster_health.stderr_lines"
+      delay: 10
+
+  rescue:
+
+    - name: Remove temporary directory if failed
+      run_once: true
+      delegate_to: localhost
+      become: false
+      ansible.builtin.file:
+        state: absent
+        path: "{{ conf_tmp }}"

@@ -1,0 +1,4 @@
+---
+# defaults for role talos_deploy
+vmware_vm_upgrade_version: "19"
+talos_deploy_host: localhost

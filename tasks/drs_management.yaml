@@ -1,0 +1,34 @@
+---
+
+- name: Manage DRS
+  block:
+
+    - name: Create an empty dictionary for unique hosts by zone
+      set_fact:
+        unique_hosts_by_zone: {}
+
+    - name: Populate the dictionary with unique hosts per zone
+      set_fact:
+        unique_hosts_by_zone: "{{ unique_hosts_by_zone | combine({zone: (unique_hosts_by_zone[zone] | default([])) + [host]}, recursive=True) }}"
+      loop: "{{ play_hosts }}"
+      loop_control:
+        loop_var: host
+      vars:
+        zone: "{{ hostvars[host]['vmware_location'] }}"
+
+    - name: Add vms to DRS host groups for each failure domain
+      community.vmware.vmware_drs_group_manager:
+        hostname: "{{ vmware_args.auth.hostname }}"
+        username: "{{ vmware_args.auth.user }}"
+        password: "{{ vmware_args.auth.password }}"
+        datacenter: "{{ vmware_args.datacenter }}"
+        cluster: "{{ vmware_args.cluster }}"
+        group_name: "{{ item.key }}-vms"
+        vms: "{{ item.value }}"
+        state: present
+      become: false
+      loop: "{{ unique_hosts_by_zone | dict2items }}"
+
+  run_once: true
+  when: vmware_drs_mangement
+  delegate_to: "{{ talos_deploy_host }}"

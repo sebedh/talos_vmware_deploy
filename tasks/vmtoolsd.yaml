@@ -1,0 +1,84 @@
+---
+
+- name: Deploy vmtoolsd
+  run_once: true
+  delegate_to: "{{ talos_deploy_host }}"
+  block:
+    
+    - name: Set expected number of nodes
+      set_fact:
+        num_nodes: "{{ ansible_play_hosts_all | length }}"
+
+    - name: Retrieve the kubernetes config from talos
+      ansible.builtin.command: >
+        talosctl --talosconfig {{ conf_tmp.path }}/talosconfig
+        kubeconfig {{ conf_tmp.path }}/kubeconfig
+        --endpoints {{ vmware_vm_ip }}
+        --nodes {{ vmware_vm_ip }}
+      changed_when: false
+      when: "'-c01' in inventory_hostname"
+    
+    - name: Retrieve info about vmtoolsd DaemonSet
+      kubernetes.core.k8s_info:
+        kind: DaemonSet
+        kubeconfig: "{{ conf_tmp.path }}/kubeconfig"
+        name: talos-vmtoolsd
+        namespace: kube-system
+      register: toolsdstatus
+
+    - name: Create new talos os admin role for vmtoolsd, skipping if healthy
+      command:
+        cmd: >
+          talosctl --talosconfig {{ conf_tmp.path }}/talosconfig
+          --nodes {{ vmware_vm_ip }}
+          --endpoints {{ vmware_vm_ip }}
+          config new {{ conf_tmp.path }}/vmtoolsd-secret.yaml
+          --roles os:admin
+        creates: "{{ conf_tmp.path }}/vmtoolsd-secret.yaml"
+      when: 
+        - toolsdstatus.resources[0].status.currentNumberScheduled == num_nodes|int
+        - toolsdstatus.resources[0].status.numberReady == 0
+
+    - name: Read vmtoolsd-secret configuration (Will b64 encode)
+      ansible.builtin.slurp:
+        src: "{{ conf_tmp.path }}/vmtoolsd-secret.yaml"
+      register: talosconfig
+
+    - name: Create secrets for vmtoolsd, skipping if healthy DaemonSet
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ conf_tmp.path }}/kubeconfig"
+        definition:
+          apiVersion: v1
+          kind: Secret
+          type: Opaque
+          metadata:
+            namespace: kube-system
+            name: talos-vmtoolsd-config
+          data:
+            talosconfig: "{{ talosconfig.content }}"
+      when: 
+        - toolsdstatus.resources[0].status.currentNumberScheduled == num_nodes|int
+        - toolsdstatus.resources[0].status.numberReady == 0
+
+    - name: Await vmtoolsd DaemonSet to be ready!
+      kubernetes.core.k8s_info:
+        kind: DaemonSet
+        kubeconfig: "{{ conf_tmp.path }}/kubeconfig"
+        name: talos-vmtoolsd
+        namespace: kube-system
+      register: toolsdstatus
+      retries: 15
+      delay: 10
+      until: toolsdstatus.resources[0].status.numberReady == num_nodes|int
+
+  always:
+
+    - name: Remove the configuration
+      ansible.builtin.file:
+        state: absent
+        path: "{{ conf_tmp.path }}"
+      when: customize is succeeded
+      changed_when: false
+      delegate_to: "{{ talos_deploy_host }}"
+      run_once: true
