@@ -145,9 +145,7 @@ talos_machine_config: |
       key: {{ talos_cluster_serviceAccount_key }}
     apiServer:
       image: registry.k8s.io/kube-apiserver:{{ k8s_version }}
-      certSANs:
-        - {{ k8s_vip }}
-        - glb-k8s-common.sbab.se
+      certSANs: {{ talos_api_server_cert_sans }}
       disablePodSecurityPolicy: true
       admissionControl:
         - name: PodSecurity
