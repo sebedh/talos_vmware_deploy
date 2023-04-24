@@ -20,11 +20,11 @@ pip install -U <SDK_DIRECTORY_PATH>
 So far only static IP is supported
 
 ## Talos
-`talos_machine_config`: Machine config for Talos. Should be string.
+- `talos_machine_config`: Machine config for Talos. Should be string.
 
 ## VMWare settings
-`vmware_vm_ip`: Static IP for each host. This is used to communicate with your cluster using `talosctl`.
+- `vmware_vm_ip`: Static IP for each host. This is used to communicate with your cluster using `talosctl`.
 
 ## VMWare DRS
-`vmware_drs_management`: boolean. Set true and make sure you have affinity groups defined in your vmware cluster with name `<location>-vms`
-`vmware_location`: Host variable set if you use vmware_drs_management.
+- `vmware_drs_management`: boolean. Set true and make sure you have affinity groups defined in your vmware cluster with name `<location>-vms`
+- `vmware_location`: Host variable set if you use vmware_drs_management.
