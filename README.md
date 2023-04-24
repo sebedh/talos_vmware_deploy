@@ -82,9 +82,7 @@ talos_machine_config: |
     ca:
       crt: {{ talos_machine_ca_crt }}
       key: {{ talos_machine_ca_key }}
-    certSANs:
-      - glb-k8s-common.sbab.se
-      - glb.common
+    certSANs: {{ talos_machine_cert_sans }}
     kubelet:
       image: ghcr.io/siderolabs/kubelet:{{ k8s_version }}
       defaultRuntimeSeccompProfileEnabled: true
