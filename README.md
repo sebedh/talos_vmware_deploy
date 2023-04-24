@@ -118,7 +118,7 @@ talos_machine_config: |
       stableHostname: true
       apidCheckExtKeyUsage: true
   cluster:
-    id: 3jxExcGK7LLpwBzc1qU0LVZPiAAzuKfCbFklCsDvPXA=
+    id: {{ talos_cluster_id }}
     secret: {{ talos_cluster_secret }}
     controlPlane:
       endpoint: https://{{ k8s_vip }}:6443
